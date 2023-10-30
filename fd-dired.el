@@ -110,6 +110,7 @@ use in place of \"-ls\" as the final argument."
                      (read-string "Run fd (with args and search): " fd-dired-input-fd-args
                                   '(fd-dired-args-history . 1))))
   (let ((dired-buffers dired-buffers)
+        proc
         (fd-dired-buffer-name (if fd-dired-generate-random-buffer
                                   (format " *%s*" (make-temp-name "Fd "))
                                 "*Fd*")))
@@ -122,7 +123,7 @@ use in place of \"-ls\" as the final argument."
 
     (get-buffer-create fd-dired-buffer-name)
     (if fd-dired-display-in-current-window
-        (display-buffer (get-buffer fd-dired-buffer-name) nil)
+        (display-buffer-same-window (get-buffer fd-dired-buffer-name) nil)
       (display-buffer-below-selected (get-buffer fd-dired-buffer-name) nil)
       (select-window (get-buffer-window fd-dired-buffer-name)))
 
@@ -150,7 +151,11 @@ use in place of \"-ls\" as the final argument."
                                      (shell-quote-argument "{}")
                                      find-exec-terminator)
                            (car fd-dired-ls-option))))
-      (shell-command (concat args " &") (get-buffer-create fd-dired-buffer-name))
+      (setq proc (start-process "*fd-proc*" (get-buffer-create fd-dired-buffer-name) "sh" "-c" args))
+      (set-process-filter proc (function find-dired-filter))
+      (set-process-sentinel proc (function find-dired-sentinel))
+      ;; Initialize the process marker; it is used by the filter.
+      (move-marker (process-mark proc) (point) (get-buffer fd-dired-buffer-name))
 
       ;; enable Dired mode
       ;; The next statement will bomb in classic dired (no optional arg allowed)
@@ -189,11 +194,6 @@ use in place of \"-ls\" as the final argument."
         (dired-insert-set-properties point (point)))
       (setq buffer-read-only t)
 
-      (let ((proc (get-buffer-process (get-buffer fd-dired-buffer-name))))
-        (set-process-filter proc (function find-dired-filter))
-        (set-process-sentinel proc (function find-dired-sentinel))
-        ;; Initialize the process marker; it is used by the filter.
-        (move-marker (process-mark proc) (point) (get-buffer fd-dired-buffer-name)))
       (setq mode-line-process '(":%s")))))
 
 ;;;###autoload
